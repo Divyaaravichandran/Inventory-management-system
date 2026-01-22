@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Kongu Hi-Tech Rice Industries - Inventory & Operations Management System
 
 A comprehensive MERN stack application for managing rice industry operations including procurement, production, sales, and finance.
@@ -156,3 +157,6 @@ Frontend will run on `http://localhost:3000`
 ## License
 
 This project is proprietary software for Kongu Hi-Tech Rice Industries.
+=======
+# Inventory-management-system
+>>>>>>> ba81771b79bbe7978a43e6f966f7184c1e3281ed
