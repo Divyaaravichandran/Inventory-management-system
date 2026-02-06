@@ -16,8 +16,9 @@ const Payments = () => {
   const [summary, setSummary] = useState(null);
   const [ledger, setLedger] = useState([]);
   const [sales, setSales] = useState([]);
+  const [invoices, setInvoices] = useState([]);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
-  const [selectedSale, setSelectedSale] = useState(null);
+  const [selectedSaleId, setSelectedSaleId] = useState('');
   const [paymentData, setPaymentData] = useState({
     amount: '',
     paymentMethod: 'cash',
@@ -25,11 +26,20 @@ const Payments = () => {
     notes: '',
   });
   const [loading, setLoading] = useState(true);
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState('');
+  const [dealerPaymentData, setDealerPaymentData] = useState({
+    amount: '',
+    paymentMethod: 'cash',
+    referenceNumber: '',
+    notes: '',
+  });
+  const [dealerPaymentLoading, setDealerPaymentLoading] = useState(false);
 
   useEffect(() => {
     fetchSummary();
     fetchLedger();
     fetchSales();
+    fetchInvoices();
   }, []);
 
   const fetchSummary = async () => {
@@ -52,6 +62,46 @@ const Payments = () => {
     }
   };
 
+  const handleDealerPaymentSubmit = async (e) => {
+    e.preventDefault();
+    const invoice = invoices.find((inv) => inv._id === selectedInvoiceId);
+    if (!invoice) {
+      toast.error('Please select an invoice');
+      return;
+    }
+    const amount = parseFloat(dealerPaymentData.amount);
+    if (!amount || amount <= 0) {
+      toast.error('Enter a valid amount');
+      return;
+    }
+    setDealerPaymentLoading(true);
+    try {
+      await axios.post('http://localhost:5000/api/payments', {
+        invoiceId: invoice._id,
+        customerName: invoice.dealer?.dealerName || invoice.dealerId,
+        amount,
+        paymentMethod: dealerPaymentData.paymentMethod,
+        referenceNumber: dealerPaymentData.referenceNumber,
+        notes: dealerPaymentData.notes,
+      });
+      toast.success('Dealer invoice payment recorded successfully!');
+      setSelectedInvoiceId('');
+      setDealerPaymentData({
+        amount: '',
+        paymentMethod: 'cash',
+        referenceNumber: '',
+        notes: '',
+      });
+      fetchInvoices();
+    } catch (error) {
+      const message =
+        error.response?.data?.message || 'Failed to record dealer payment';
+      toast.error(message);
+    } finally {
+      setDealerPaymentLoading(false);
+    }
+  };
+
   const fetchSales = async () => {
     try {
       const response = await axios.get('http://localhost:5000/api/sales');
@@ -61,14 +111,27 @@ const Payments = () => {
     }
   };
 
+  const fetchInvoices = async () => {
+    try {
+      const response = await axios.get('http://localhost:5000/api/invoices');
+      setInvoices(response.data || []);
+    } catch (error) {
+      console.error('Failed to load invoices');
+    }
+  };
+
   const handlePaymentSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedSale) return;
+    const currentSale = sales.find((s) => s._id === selectedSaleId);
+    if (!currentSale) {
+      toast.error('Please select a customer');
+      return;
+    }
 
     try {
       await axios.post('http://localhost:5000/api/payments', {
-        saleId: selectedSale._id,
-        customerName: selectedSale.customerName,
+        saleId: currentSale._id,
+        customerName: currentSale.customerName,
         amount: parseFloat(paymentData.amount),
         paymentMethod: paymentData.paymentMethod,
         referenceNumber: paymentData.referenceNumber,
@@ -76,7 +139,7 @@ const Payments = () => {
       });
       toast.success('Payment recorded successfully!');
       setShowPaymentForm(false);
-      setSelectedSale(null);
+      setSelectedSaleId('');
       setPaymentData({
         amount: '',
         paymentMethod: 'cash',
@@ -86,6 +149,7 @@ const Payments = () => {
       fetchSummary();
       fetchLedger();
       fetchSales();
+      fetchInvoices();
     } catch (error) {
       const message = error.response?.data?.message || 'Failed to record payment';
       toast.error(message);
@@ -239,7 +303,7 @@ const Payments = () => {
             <button
               onClick={() => {
                 setShowPaymentForm(true);
-                setSelectedSale(sales[0] || null);
+                setSelectedSaleId(sales[0]?._id || '');
               }}
               className="btn-primary flex items-center space-x-2"
               disabled={sales.length === 0}
@@ -249,25 +313,35 @@ const Payments = () => {
             </button>
           </div>
 
-          {showPaymentForm && selectedSale && (
+          {showPaymentForm && (
             <div className="mb-6 p-6 bg-gray-50 rounded-lg border-2 border-primary-200">
               <h4 className="text-lg font-semibold text-gray-800 mb-4">Record Payment</h4>
               <form onSubmit={handlePaymentSubmit} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="label">Customer</label>
-                    <input
-                      type="text"
-                      value={selectedSale.customerName}
-                      className="input-field bg-gray-100"
-                      disabled
-                    />
+                    <label className="label">Customer (Name &amp; ID)</label>
+                    <select
+                      className="input-field"
+                      value={selectedSaleId}
+                      onChange={(e) => setSelectedSaleId(e.target.value)}
+                      required
+                    >
+                      <option value="">Select customer</option>
+                      {sales.map((sale) => (
+                        <option key={sale._id} value={sale._id}>
+                          {sale.customerName} ({sale._id.slice(-6)})
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="label">Outstanding Balance</label>
                     <input
                       type="text"
-                      value={`₹${selectedSale.balanceAmount?.toLocaleString()}`}
+                      value={`₹${
+                        sales.find((s) => s._id === selectedSaleId)?.balanceAmount?.toLocaleString() ||
+                        '0'
+                      }`}
                       className="input-field bg-gray-100"
                       disabled
                     />
@@ -282,7 +356,9 @@ const Payments = () => {
                       }
                       className="input-field"
                       step="0.01"
-                      max={selectedSale.balanceAmount}
+                      max={
+                        sales.find((s) => s._id === selectedSaleId)?.balanceAmount || undefined
+                      }
                       required
                     />
                   </div>
@@ -334,7 +410,7 @@ const Payments = () => {
                     type="button"
                     onClick={() => {
                       setShowPaymentForm(false);
-                      setSelectedSale(null);
+                      setSelectedSaleId('');
                     }}
                     className="btn-secondary"
                   >
@@ -406,7 +482,7 @@ const Payments = () => {
                             onClick={() => {
                               const sale = sales.find((s) => s.customerName === entry.customer);
                               if (sale) {
-                                setSelectedSale(sale);
+                                setSelectedSaleId(sale._id);
                                 setShowPaymentForm(true);
                               }
                             }}
@@ -428,6 +504,128 @@ const Payments = () => {
               </tbody>
             </table>
           </div>
+        </div>
+
+        {/* Dealer Invoice Payments */}
+        <div className="mt-8 card">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-bold text-gray-800">Dealer Invoice Payments</h3>
+          </div>
+          <form onSubmit={handleDealerPaymentSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="label">Dealer Invoice (Dealer &amp; ID)</label>
+                <select
+                  className="input-field"
+                  value={selectedInvoiceId}
+                  onChange={(e) => setSelectedInvoiceId(e.target.value)}
+                >
+                  <option value="">Select invoice</option>
+                  {invoices
+                    .filter((inv) => inv.paymentStatus !== 'paid')
+                    .map((inv) => (
+                      <option key={inv._id} value={inv._id}>
+                        {(inv.dealer?.dealerName || inv.dealerId) || 'Dealer'} (
+                        {inv.dealerId}) - {inv.invoiceNumber}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <div>
+                <label className="label">Outstanding Amount</label>
+                <input
+                  type="text"
+                  className="input-field bg-gray-100"
+                  disabled
+                  value={
+                    selectedInvoiceId
+                      ? (() => {
+                          const inv = invoices.find(
+                            (i) => i._id === selectedInvoiceId
+                          );
+                          if (!inv) return '₹0';
+                          const remaining =
+                            (inv.amount || 0) - (inv.paidAmount || 0);
+                          return `₹${remaining.toLocaleString()}`;
+                        })()
+                      : '₹0'
+                  }
+                />
+              </div>
+              <div>
+                <label className="label">Payment Amount *</label>
+                <input
+                  type="number"
+                  className="input-field"
+                  value={dealerPaymentData.amount}
+                  onChange={(e) =>
+                    setDealerPaymentData({
+                      ...dealerPaymentData,
+                      amount: e.target.value,
+                    })
+                  }
+                  step="0.01"
+                  min="0"
+                  required
+                />
+              </div>
+              <div>
+                <label className="label">Payment Method *</label>
+                <select
+                  className="input-field"
+                  value={dealerPaymentData.paymentMethod}
+                  onChange={(e) =>
+                    setDealerPaymentData({
+                      ...dealerPaymentData,
+                      paymentMethod: e.target.value,
+                    })
+                  }
+                  required
+                >
+                  <option value="cash">Cash</option>
+                  <option value="cheque">Cheque</option>
+                  <option value="bank_transfer">Bank Transfer</option>
+                  <option value="upi">UPI</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label className="label">Reference Number</label>
+                <input
+                  type="text"
+                  className="input-field"
+                  value={dealerPaymentData.referenceNumber}
+                  onChange={(e) =>
+                    setDealerPaymentData({
+                      ...dealerPaymentData,
+                      referenceNumber: e.target.value,
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <label className="label">Notes</label>
+                <textarea
+                  className="input-field"
+                  rows="2"
+                  value={dealerPaymentData.notes}
+                  onChange={(e) =>
+                    setDealerPaymentData({
+                      ...dealerPaymentData,
+                      notes: e.target.value,
+                    })
+                  }
+                />
+              </div>
+            </div>
+            <button
+              type="submit"
+              disabled={dealerPaymentLoading}
+              className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {dealerPaymentLoading ? 'Recording Payment...' : 'Record Dealer Payment'}
+            </button>
+          </form>
         </div>
       </div>
     </Layout>

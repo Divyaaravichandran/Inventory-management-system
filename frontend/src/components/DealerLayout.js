@@ -1,24 +1,18 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useDealerAuth } from '../context/DealerAuthContext';
 import {
   FiHome,
-  FiPackage,
-  FiTruck,
-  FiDollarSign,
-  FiSettings,
+  FiShoppingCart,
+  FiFileText,
   FiLogOut,
   FiMenu,
   FiX,
-  FiBox,
-  FiShoppingCart,
-  FiBarChart2,
-  FiClock,
 } from 'react-icons/fi';
 
-const Layout = ({ children }) => {
+const DealerLayout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { user, logout } = useAuth();
+  const { dealerUser, logout } = useDealerAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -28,22 +22,16 @@ const Layout = ({ children }) => {
   };
 
   const menuItems = [
-    { path: '/admin/dashboard', icon: FiHome, label: 'Dashboard' },
-    { path: '/admin/paddy-inward', icon: FiPackage, label: 'Paddy Inward' },
-    { path: '/admin/godown', icon: FiBox, label: 'Godown' },
-    { path: '/admin/rice-stock', icon: FiBarChart2, label: 'Rice Stock' },
-    { path: '/admin/sales', icon: FiShoppingCart, label: 'Sales' },
-    { path: '/admin/recent-orders', icon: FiClock, label: 'Recent Orders' },
-    { path: '/admin/dispatch', icon: FiTruck, label: 'Dispatch' },
-    { path: '/admin/payments', icon: FiDollarSign, label: 'Payments' },
-    { path: '/admin/settings', icon: FiSettings, label: 'Settings' },
+    { path: '/dealer/dashboard', icon: FiHome, label: 'Dashboard' },
+    { path: '/dealer/orders', icon: FiShoppingCart, label: 'My Orders' },
+    { path: '/dealer/invoices', icon: FiFileText, label: 'Invoices' },
   ];
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Mobile Sidebar Toggle */}
       <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-white shadow-md p-4 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-primary-700">Kongu</h1>
+        <h1 className="text-xl font-bold text-primary-700">Kongu Rice - Dealer</h1>
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
           className="p-2 rounded-lg hover:bg-gray-100"
@@ -61,11 +49,11 @@ const Layout = ({ children }) => {
         <div className="p-6">
           <div className="flex items-center space-x-3 mb-8">
             <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
-              <span className="text-primary-700 font-bold text-xl">K</span>
+              <span className="text-primary-700 font-bold text-xl">D</span>
             </div>
             <div>
-              <h2 className="font-bold text-lg">Kongu</h2>
-              <p className="text-xs text-primary-200">Hi-Tech Rice Industries</p>
+              <h2 className="font-bold text-lg">Dealer Portal</h2>
+              <p className="text-xs text-primary-200">Kongu Hi-Tech</p>
             </div>
           </div>
 
@@ -107,7 +95,7 @@ const Layout = ({ children }) => {
                   <h1 className="text-xl font-bold text-gray-800">
                     Kongu Hi-Tech Rice Industries
                   </h1>
-                  <p className="text-xs text-gray-500">Inventory & Operations Management</p>
+                  <p className="text-xs text-gray-500">Dealer Dashboard</p>
                 </div>
               </div>
             </div>
@@ -115,12 +103,14 @@ const Layout = ({ children }) => {
               <div className="hidden md:flex items-center space-x-3">
                 <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
                   <span className="text-primary-700 font-semibold">
-                    {user?.name?.charAt(0).toUpperCase()}
+                    {dealerUser?.name?.charAt(0).toUpperCase()}
                   </span>
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-800">{user?.name}</p>
-                  <p className="text-xs text-gray-500 capitalize">{user?.role}</p>
+                  <p className="text-sm font-semibold text-gray-800">
+                    {dealerUser?.name}
+                  </p>
+                  <p className="text-xs text-gray-500">Dealer ID: {dealerUser?.dealerId}</p>
                 </div>
               </div>
               <button
@@ -149,4 +139,5 @@ const Layout = ({ children }) => {
   );
 };
 
-export default Layout;
+export default DealerLayout;
+

@@ -24,6 +24,18 @@ const userSchema = new mongoose.Schema({
     enum: ['admin', 'dealer', 'user'],
     default: 'admin'
   },
+  // Optional link to a dealer account when role === 'dealer'
+  dealerId: {
+    type: String,
+    unique: true,
+    sparse: true,
+    trim: true
+  },
+  dealer: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Dealer',
+    default: null
+  },
   isActive: {
     type: Boolean,
     default: true

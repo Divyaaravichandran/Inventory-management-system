@@ -9,6 +9,8 @@ import {
   FiLayers,
   FiAlertCircle,
   FiDollarSign,
+  FiUsers,
+  FiShoppingCart,
 } from 'react-icons/fi';
 import {
   BarChart,
@@ -34,6 +36,8 @@ const AdminDashboard = () => {
   const [paddyStock, setPaddyStock] = useState([]);
   const [recentSales, setRecentSales] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [dealerSummary, setDealerSummary] = useState({ count: 0, active: 0 });
+  const [ordersSummary, setOrdersSummary] = useState({ sales: 0, dealer: 0 });
 
   useEffect(() => {
     fetchDashboardData();
@@ -41,6 +45,8 @@ const AdminDashboard = () => {
     fetchAlerts();
     fetchPaddyStock();
     fetchRecentSales();
+    fetchDealerSummary();
+    fetchOrdersSummary();
   }, [period]);
 
   const fetchDashboardData = async () => {
@@ -90,6 +96,32 @@ const AdminDashboard = () => {
     }
   };
 
+  const fetchDealerSummary = async () => {
+    try {
+      const res = await axios.get('http://localhost:5000/api/dealers');
+      const all = res.data || [];
+      const active = all.filter((d) => d.status === 'active').length;
+      setDealerSummary({ count: all.length, active });
+    } catch (error) {
+      // silent fail; dealers section is additive
+    }
+  };
+
+  const fetchOrdersSummary = async () => {
+    try {
+      const [salesRes, dealerRes] = await Promise.all([
+        axios.get('http://localhost:5000/api/sales'),
+        axios.get('http://localhost:5000/api/dealer-orders'),
+      ]);
+      setOrdersSummary({
+        sales: (salesRes.data || []).length,
+        dealer: (dealerRes.data || []).length,
+      });
+    } catch (error) {
+      console.error('Failed to load orders summary:', error);
+    }
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -131,12 +163,6 @@ const AdminDashboard = () => {
             color="from-blue-500 to-blue-600"
           />
           <KPICard
-            icon={FiTrendingUp}
-            title="Rice in Production"
-            value={`${(kpis.riceInProduction || 0).toFixed(2)} kg`}
-            color="from-purple-500 to-purple-600"
-          />
-          <KPICard
             icon={FiBox}
             title="Rice Stock"
             value={`${(kpis.riceStock || 0).toFixed(2)} kg`}
@@ -148,31 +174,74 @@ const AdminDashboard = () => {
             value={`${Object.values(kpis.bagsStock || {}).reduce((a, b) => a + b, 0)} bags`}
             color="from-orange-500 to-orange-600"
           />
+          <KPICard
+            icon={FiUsers}
+            title="Dealer Orders"
+            value={`${ordersSummary.dealer}`}
+            color="from-teal-500 to-teal-600"
+          />
         </div>
 
-        {/* Additional KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Bag Stock by Size */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <KPICard
             icon={FiBox}
             title="5kg Bags"
             value={`${kpis.bagsStock?.['5kg'] || 0}`}
-            color="from-yellow-500 to-yellow-600"
+            color="from-purple-500 to-purple-600"
             small
           />
           <KPICard
             icon={FiBox}
             title="10kg Bags"
             value={`${kpis.bagsStock?.['10kg'] || 0}`}
-            color="from-yellow-500 to-yellow-600"
+            color="from-purple-500 to-purple-600"
             small
           />
           <KPICard
             icon={FiBox}
             title="25kg Bags"
             value={`${kpis.bagsStock?.['25kg'] || 0}`}
-            color="from-yellow-500 to-yellow-600"
+            color="from-purple-500 to-purple-600"
             small
           />
+          <KPICard
+            icon={FiBox}
+            title="75kg Bags"
+            value={`${kpis.bagsStock?.['75kg'] || 0}`}
+            color="from-purple-500 to-purple-600"
+            small
+          />
+        </div>
+
+        {/* Dealers Section */}
+        <div className="card">
+          <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
+            <FiUsers className="mr-2 text-primary-600" />
+            Dealers
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+            <div>
+              <p className="text-sm text-gray-600">Total Dealers</p>
+              <p className="text-2xl font-bold text-gray-800">
+                {dealerSummary.count}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">Active Dealers</p>
+              <p className="text-2xl font-bold text-gray-800">
+                {dealerSummary.active}
+              </p>
+            </div>
+            <div className="flex md:justify-end">
+              <a
+                href="/admin/dealers"
+                className="btn-primary text-sm px-4 py-2"
+              >
+                Manage Dealers
+              </a>
+            </div>
+          </div>
         </div>
 
         {/* Alerts */}

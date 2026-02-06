@@ -19,8 +19,8 @@ const RoleSelection = () => {
       name: 'Dealer',
       icon: FiUser,
       description: 'Dealer portal access',
-      enabled: false,
-      color: 'from-gray-400 to-gray-600',
+      enabled: true,
+      color: 'from-primary-500 to-primary-700',
     },
     {
       id: 'user',
@@ -33,9 +33,9 @@ const RoleSelection = () => {
   ];
 
   const handleRoleSelect = (role) => {
-    if (role.enabled && role.id === 'admin') {
-      navigate('/admin/login');
-    }
+    if (!role.enabled) return;
+    if (role.id === 'admin') navigate('/admin/login');
+    if (role.id === 'dealer') navigate('/dealer/login');
   };
 
   return (

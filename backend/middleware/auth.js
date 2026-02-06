@@ -30,4 +30,11 @@ const adminOnly = (req, res, next) => {
   next();
 };
 
-module.exports = { auth, adminOnly };
+const dealerOnly = (req, res, next) => {
+  if (req.user.role !== 'dealer') {
+    return res.status(403).json({ message: 'Access denied. Dealer only.' });
+  }
+  next();
+};
+
+module.exports = { auth, adminOnly, dealerOnly };

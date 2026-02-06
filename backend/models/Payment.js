@@ -1,10 +1,18 @@
 const mongoose = require('mongoose');
 
 const paymentSchema = new mongoose.Schema({
+  // Either saleId (for normal customers) or invoiceId (for dealer invoices)
   saleId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Sales',
-    required: true
+    ref: 'Sales'
+  },
+  invoiceId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Invoice'
+  },
+  dealerId: {
+    type: String,
+    trim: true
   },
   customerName: {
     type: String,

@@ -19,9 +19,17 @@ const RiceSales = () => {
   const [totalAmount, setTotalAmount] = useState(0);
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [dealers, setDealers] = useState([]);
+  const [dealerOrders, setDealerOrders] = useState([]);
+  const [selectedDealerId, setSelectedDealerId] = useState('');
+  const [selectedOrderId, setSelectedOrderId] = useState('');
+  const [invoiceAmount, setInvoiceAmount] = useState('');
+  const [invoiceNotes, setInvoiceNotes] = useState('');
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
 
   useEffect(() => {
     fetchSales();
+    fetchDealersAndOrders();
   }, []);
 
   useEffect(() => {
@@ -36,6 +44,19 @@ const RiceSales = () => {
       setSales(response.data);
     } catch (error) {
       toast.error('Failed to load sales');
+    }
+  };
+
+  const fetchDealersAndOrders = async () => {
+    try {
+      const [dealersRes, ordersRes] = await Promise.all([
+        axios.get('http://localhost:5000/api/dealers'),
+        axios.get('http://localhost:5000/api/dealer-orders'),
+      ]);
+      setDealers(dealersRes.data || []);
+      setDealerOrders(ordersRes.data || []);
+    } catch (error) {
+      console.error('Failed to load dealer data:', error);
     }
   };
 
@@ -75,6 +96,43 @@ const RiceSales = () => {
       toast.error(message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const filteredOrdersForDealer = selectedDealerId
+    ? dealerOrders.filter(
+        (o) =>
+          o.dealerId === selectedDealerId &&
+          ['approved', 'dispatched', 'delivered'].includes(o.status)
+      )
+    : [];
+
+  const handleCreateInvoice = async (e) => {
+    e.preventDefault();
+    if (!selectedDealerId || !selectedOrderId || !invoiceAmount) {
+      toast.error('Please select dealer, order, and amount');
+      return;
+    }
+    setInvoiceLoading(true);
+    try {
+      await axios.post('http://localhost:5000/api/invoices', {
+        dealerId: selectedDealerId,
+        orderId: selectedOrderId,
+        amount: parseFloat(invoiceAmount),
+        notes: invoiceNotes,
+      });
+      toast.success('Invoice created and sent to dealer');
+      setSelectedDealerId('');
+      setSelectedOrderId('');
+      setInvoiceAmount('');
+      setInvoiceNotes('');
+      fetchDealersAndOrders();
+    } catch (error) {
+      const message =
+        error.response?.data?.message || 'Failed to create invoice';
+      toast.error(message);
+    } finally {
+      setInvoiceLoading(false);
     }
   };
 
@@ -235,11 +293,13 @@ const RiceSales = () => {
             </div>
           </div>
 
-          {/* Recent Sales */}
-          <div>
+          {/* Right column: recent sales + dealer invoice */}
+          <div className="space-y-6">
             <div className="card">
-              <h2 className="text-lg font-semibold text-gray-800 mb-4">Recent Sales</h2>
-              <div className="space-y-3 max-h-96 overflow-y-auto">
+              <h2 className="text-lg font-semibold text-gray-800 mb-4">
+                Recent Sales
+              </h2>
+              <div className="space-y-3 max-h-80 overflow-y-auto">
                 {sales.slice(0, 10).map((sale) => (
                   <div key={sale._id} className="p-3 bg-gray-50 rounded-lg">
                     <div className="flex items-center justify-between mb-1">
@@ -259,9 +319,91 @@ const RiceSales = () => {
                   </div>
                 ))}
                 {sales.length === 0 && (
-                  <p className="text-center text-gray-500 text-sm py-4">No sales yet</p>
+                  <p className="text-center text-gray-500 text-sm py-4">
+                    No sales yet
+                  </p>
                 )}
               </div>
+            </div>
+
+            {/* Dealer Invoice creation */}
+            <div className="card">
+              <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                <FiDollarSign className="mr-2" />
+                Create Dealer Invoice
+              </h2>
+              <form onSubmit={handleCreateInvoice} className="space-y-4">
+                <div>
+                  <label className="label">Dealer</label>
+                  <select
+                    className="input-field"
+                    value={selectedDealerId}
+                    onChange={(e) => {
+                      setSelectedDealerId(e.target.value);
+                      setSelectedOrderId('');
+                    }}
+                  >
+                    <option value="">Select Dealer</option>
+                    {dealers
+                      .filter((d) => d.status === 'active')
+                      .map((dealer) => (
+                        <option key={dealer._id} value={dealer.dealerId}>
+                          {dealer.dealerName} ({dealer.dealerId})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Dealer Order</label>
+                  <select
+                    className="input-field"
+                    value={selectedOrderId}
+                    onChange={(e) => setSelectedOrderId(e.target.value)}
+                    disabled={!selectedDealerId || filteredOrdersForDealer.length === 0}
+                  >
+                    <option value="">
+                      {selectedDealerId
+                        ? filteredOrdersForDealer.length > 0
+                          ? 'Select Order'
+                          : 'No approved orders'
+                        : 'Select dealer first'}
+                    </option>
+                    {filteredOrdersForDealer.map((order) => (
+                      <option key={order._id} value={order._id}>
+                        {order.riceType} - {order.brand} | {order.quantityBags} x{' '}
+                        {order.bagSize} ({order.status})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Invoice Amount (₹)</label>
+                  <input
+                    type="number"
+                    className="input-field"
+                    value={invoiceAmount}
+                    onChange={(e) => setInvoiceAmount(e.target.value)}
+                    step="0.01"
+                    min="0"
+                  />
+                </div>
+                <div>
+                  <label className="label">Notes</label>
+                  <textarea
+                    className="input-field"
+                    rows="2"
+                    value={invoiceNotes}
+                    onChange={(e) => setInvoiceNotes(e.target.value)}
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={invoiceLoading}
+                  className="w-full btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {invoiceLoading ? 'Creating Invoice...' : 'Create Invoice'}
+                </button>
+              </form>
             </div>
           </div>
         </div>
