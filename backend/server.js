@@ -32,12 +32,31 @@ app.get('/api/health', (req, res) => {
 });
 
 // MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/kongu_rice_industries', {
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/kongu_rice_industries';
+
+mongoose.connect(MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
-.then(() => console.log('MongoDB Connected'))
-.catch(err => console.error('MongoDB connection error:', err));
+.then(() => {
+  console.log('✅ MongoDB Connected Successfully');
+  console.log(`📊 Database: ${mongoose.connection.name}`);
+  console.log(`🌐 Host: ${mongoose.connection.host || 'Atlas Cluster'}`);
+})
+.catch(err => {
+  console.error('❌ MongoDB connection error:', err.message);
+  console.error('💡 Please check your MONGODB_URI in .env file');
+  process.exit(1);
+});
+
+// Handle connection events
+mongoose.connection.on('disconnected', () => {
+  console.log('⚠️  MongoDB disconnected');
+});
+
+mongoose.connection.on('error', (err) => {
+  console.error('❌ MongoDB error:', err);
+});
 
 const PORT = process.env.PORT || 5000;
 

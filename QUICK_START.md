@@ -18,9 +18,17 @@ cd backend
 npm install
 
 # Create .env file (copy from .env.example or create new)
-# Add your MongoDB connection string and JWT secret
+# Add your MongoDB Atlas connection string and JWT secret
 
-# Start MongoDB (if running locally)
+# MongoDB Atlas Setup:
+# 1. Create account at https://www.mongodb.com/cloud/atlas
+# 2. Create a new cluster (Free tier available)
+# 3. Create a database user (Database Access)
+# 4. Whitelist your IP address (Network Access)
+# 5. Get connection string (Connect → Connect your application)
+# 6. Copy connection string to .env as MONGODB_URI
+
+# For Local MongoDB (alternative):
 # On Windows: Make sure MongoDB service is running
 # On Mac/Linux: mongod
 
@@ -65,9 +73,14 @@ npm start
 ## Troubleshooting
 
 ### MongoDB Connection Error
-- Make sure MongoDB is running
-- Check your MongoDB connection string in `.env`
-- Default: `mongodb://localhost:27017/kongu_rice_industries`
+- **For MongoDB Atlas**: 
+  - Check your Atlas connection string in `.env`
+  - Format: `mongodb+srv://username:password@cluster.mongodb.net/database?retryWrites=true&w=majority`
+  - Ensure your IP is whitelisted in Atlas Network Access
+  - Verify database user credentials in Atlas
+- **For Local MongoDB**: 
+  - Make sure MongoDB service is running
+  - Default: `mongodb://localhost:27017/kongu_rice_industries`
 
 ### Port Already in Use
 - Backend: Change PORT in `.env` file
@@ -86,7 +99,8 @@ npm start
 
 - Backend: `http://localhost:5000`
 - Frontend: `http://localhost:3000`
-- MongoDB: `mongodb://localhost:27017/kongu_rice_industries`
+- MongoDB: MongoDB Atlas (configured via MONGODB_URI in .env)
+  - Local MongoDB fallback: `mongodb://localhost:27017/kongu_rice_industries`
 
 ## Next Steps
 
