@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const paymentSchema = new mongoose.Schema({
-  // Either saleId (for normal customers) or invoiceId (for dealer invoices)
+  // Either saleId (for normal customers), invoiceId (for dealer invoices), or userOrderId (for user orders)
   saleId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Sales'
@@ -9,6 +9,10 @@ const paymentSchema = new mongoose.Schema({
   invoiceId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Invoice'
+  },
+  userOrderId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'UserOrder'
   },
   dealerId: {
     type: String,
@@ -30,7 +34,7 @@ const paymentSchema = new mongoose.Schema({
   },
   paymentMethod: {
     type: String,
-    enum: ['cash', 'cheque', 'bank_transfer', 'upi', 'other'],
+    enum: ['cash', 'cheque', 'bank_transfer', 'upi', 'other', 'cash_on_delivery', 'online'],
     default: 'cash'
   },
   referenceNumber: {
@@ -40,6 +44,11 @@ const paymentSchema = new mongoose.Schema({
   notes: {
     type: String,
     trim: true
+  },
+  orderType: {
+    type: String,
+    enum: ['sale', 'invoice', 'user_order'],
+    default: 'sale'
   },
   receivedBy: {
     type: mongoose.Schema.Types.ObjectId,

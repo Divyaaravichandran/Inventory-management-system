@@ -18,6 +18,7 @@ const AdminDealers = () => {
     gstNumber: '',
     status: 'active',
   });
+  const [formErrors, setFormErrors] = useState({});
 
   useEffect(() => {
     fetchDealers();
@@ -45,15 +46,37 @@ const AdminDealers = () => {
     }
   };
 
+  const validateContact = (contact) => {
+    const digitsOnly = (contact || '').replace(/\D/g, '');
+    if (digitsOnly.length === 0) return { valid: false, message: 'Contact number is required' };
+    if (digitsOnly.length !== 10) return { valid: false, message: 'Enter a valid 10-digit mobile number' };
+    return { valid: true, message: '' };
+  };
+
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+    const { name, value } = e.target;
+    setFormData({ ...formData, [name]: value });
+    if (formErrors[name]) setFormErrors({ ...formErrors, [name]: '' });
+  };
+
+  const validateForm = () => {
+    const errors = {};
+    if (!formData.dealerName?.trim()) errors.dealerName = 'Dealer name is required';
+    else if (formData.dealerName.trim().length < 2) errors.dealerName = 'Dealer name must be at least 2 characters';
+    if (!formData.businessName?.trim()) errors.businessName = 'Business name is required';
+    const contactVal = validateContact(formData.contactNumber);
+    if (!contactVal.valid) errors.contactNumber = contactVal.message;
+    if (!formData.location?.trim()) errors.location = 'Location is required';
+    if (formData.gstNumber?.trim() && !/^\d{2}[A-Z]{5}\d{4}[A-Z][A-Z\d][A-Z]\d{4}$/.test(formData.gstNumber)) {
+      errors.gstNumber = 'Invalid GST format (e.g. 22AAAAA0000A1Z5)';
+    }
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!validateForm()) return;
     try {
       if (selectedDealer) {
         await axios.put(
@@ -67,6 +90,7 @@ const AdminDealers = () => {
       }
       setShowForm(false);
       setSelectedDealer(null);
+      setFormErrors({});
       setFormData({
         dealerName: '',
         businessName: '',
@@ -167,9 +191,11 @@ const AdminDealers = () => {
                   name="dealerName"
                   value={formData.dealerName}
                   onChange={handleChange}
-                  className="input-field"
+                  className={`input-field ${formErrors.dealerName ? 'border-red-500' : ''}`}
+                  placeholder="Enter dealer name"
                   required
                 />
+                {formErrors.dealerName && <p className="mt-1 text-sm text-red-600">{formErrors.dealerName}</p>}
               </div>
               <div>
                 <label className="label">Business Name *</label>
@@ -178,9 +204,11 @@ const AdminDealers = () => {
                   name="businessName"
                   value={formData.businessName}
                   onChange={handleChange}
-                  className="input-field"
+                  className={`input-field ${formErrors.businessName ? 'border-red-500' : ''}`}
+                  placeholder="Enter business name"
                   required
                 />
+                {formErrors.businessName && <p className="mt-1 text-sm text-red-600">{formErrors.businessName}</p>}
               </div>
               <div>
                 <label className="label">Contact Number *</label>
@@ -189,9 +217,12 @@ const AdminDealers = () => {
                   name="contactNumber"
                   value={formData.contactNumber}
                   onChange={handleChange}
-                  className="input-field"
+                  className={`input-field ${formErrors.contactNumber ? 'border-red-500' : ''}`}
+                  placeholder="10-digit mobile number"
+                  maxLength="10"
                   required
                 />
+                {formErrors.contactNumber && <p className="mt-1 text-sm text-red-600">{formErrors.contactNumber}</p>}
               </div>
               <div>
                 <label className="label">Location / Delivery Area *</label>
@@ -200,9 +231,11 @@ const AdminDealers = () => {
                   name="location"
                   value={formData.location}
                   onChange={handleChange}
-                  className="input-field"
+                  className={`input-field ${formErrors.location ? 'border-red-500' : ''}`}
+                  placeholder="Enter location/delivery area"
                   required
                 />
+                {formErrors.location && <p className="mt-1 text-sm text-red-600">{formErrors.location}</p>}
               </div>
               <div>
                 <label className="label">GST Number</label>
@@ -211,8 +244,10 @@ const AdminDealers = () => {
                   name="gstNumber"
                   value={formData.gstNumber}
                   onChange={handleChange}
-                  className="input-field"
+                  className={`input-field ${formErrors.gstNumber ? 'border-red-500' : ''}`}
+                  placeholder="e.g. 22AAAAA0000A1Z5"
                 />
+                {formErrors.gstNumber && <p className="mt-1 text-sm text-red-600">{formErrors.gstNumber}</p>}
               </div>
               <div>
                 <label className="label">Status</label>

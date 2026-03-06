@@ -26,9 +26,9 @@ const RoleSelection = () => {
       id: 'user',
       name: 'User',
       icon: FiUsers,
-      description: 'Limited access',
-      enabled: false,
-      color: 'from-gray-400 to-gray-600',
+      description: 'Shop for rice products online',
+      enabled: true,
+      color: 'from-primary-500 to-primary-700',
     },
   ];
 
@@ -36,6 +36,7 @@ const RoleSelection = () => {
     if (!role.enabled) return;
     if (role.id === 'admin') navigate('/admin/login');
     if (role.id === 'dealer') navigate('/dealer/login');
+    if (role.id === 'user') navigate('/user/login');
   };
 
   return (

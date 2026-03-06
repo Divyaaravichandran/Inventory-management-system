@@ -1,16 +1,15 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useUserAuth } from '../context/UserAuthContext';
 import { FiMail, FiLock, FiArrowLeft } from 'react-icons/fi';
 
-const AdminLogin = () => {
+const UserLogin = () => {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
   });
-  const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login } = useUserAuth();
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -18,41 +17,18 @@ const AdminLogin = () => {
       ...formData,
       [e.target.name]: e.target.value,
     });
-    if (errors[e.target.name]) {
-      setErrors({
-        ...errors,
-        [e.target.name]: '',
-      });
-    }
-  };
-
-  const validate = () => {
-    const newErrors = {};
-    if (!formData.email) {
-      newErrors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'Email is invalid';
-    }
-    if (!formData.password) {
-      newErrors.password = 'Password is required';
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
-    }
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!validate()) return;
-
     setLoading(true);
-    const result = await login(formData.email, formData.password);
-    setLoading(false);
 
+    const result = await login(formData.email, formData.password);
     if (result.success) {
-      navigate('/admin/dashboard');
+      navigate('/user/dashboard');
     }
+
+    setLoading(false);
   };
 
   return (
@@ -73,7 +49,7 @@ const AdminLogin = () => {
                 <span className="text-3xl">🌾</span>
               </div>
             </div>
-            <h1 className="text-3xl font-bold text-gray-800 mb-2">Admin Login</h1>
+            <h1 className="text-3xl font-bold text-gray-800 mb-2">Customer Login</h1>
             <p className="text-gray-600">Welcome back! Please login to continue.</p>
           </div>
 
@@ -88,12 +64,10 @@ const AdminLogin = () => {
                 name="email"
                 value={formData.email}
                 onChange={handleChange}
-                className={`input-field ${errors.email ? 'border-red-500' : ''}`}
-                placeholder="admin@kongurice.com"
+                className="input-field"
+                placeholder="your@email.com"
+                required
               />
-              {errors.email && (
-                <p className="mt-1 text-sm text-red-600">{errors.email}</p>
-              )}
             </div>
 
             <div>
@@ -106,12 +80,10 @@ const AdminLogin = () => {
                 name="password"
                 value={formData.password}
                 onChange={handleChange}
-                className={`input-field ${errors.password ? 'border-red-500' : ''}`}
+                className="input-field"
                 placeholder="Enter your password"
+                required
               />
-              {errors.password && (
-                <p className="mt-1 text-sm text-red-600">{errors.password}</p>
-              )}
             </div>
 
             <button
@@ -123,10 +95,18 @@ const AdminLogin = () => {
             </button>
           </form>
 
+          <div className="mt-6 text-center">
+            <p className="text-gray-600">
+              Don't have an account?{' '}
+              <Link to="/user/signup" className="text-primary-600 hover:text-primary-700 font-semibold">
+                Sign up
+              </Link>
+            </p>
+          </div>
         </div>
       </div>
     </div>
   );
 };
 
-export default AdminLogin;
+export default UserLogin;

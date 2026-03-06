@@ -15,6 +15,7 @@ app.use(express.urlencoded({ extended: true }));
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/dealer-auth', require('./routes/dealerAuth'));
+app.use('/api/user-auth', require('./routes/userAuth'));
 app.use('/api/paddy', require('./routes/paddy'));
 app.use('/api/rice', require('./routes/rice'));
 app.use('/api/sales', require('./routes/sales'));
@@ -25,6 +26,7 @@ app.use('/api/admin', require('./routes/admin'));
 app.use('/api/dealers', require('./routes/dealers'));
 app.use('/api/dealer-orders', require('./routes/dealerOrders'));
 app.use('/api/invoices', require('./routes/invoices'));
+app.use('/api/user', require('./routes/userOrders'));
 
 // Health check
 app.get('/api/health', (req, res) => {

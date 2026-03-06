@@ -5,17 +5,23 @@ import toast from 'react-hot-toast';
 import { FiShoppingCart, FiDollarSign } from 'react-icons/fi';
 
 const RiceSales = () => {
+  const BAG_SIZES = ['5kg', '10kg', '25kg', '75kg'];
+  const BAG_WEIGHTS = { '5kg': 5, '10kg': 10, '25kg': 25, '75kg': 75 };
   const [formData, setFormData] = useState({
     customerName: '',
     customerContact: '',
     customerAddress: '',
     riceType: '',
+    bagSize: '',
+    quantityBags: '',
     quantity: '',
     rate: '',
     vehicleNumber: '',
     driverName: '',
     destination: '',
   });
+  const [contactError, setContactError] = useState('');
+  const [formErrors, setFormErrors] = useState({});
   const [totalAmount, setTotalAmount] = useState(0);
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -26,17 +32,23 @@ const RiceSales = () => {
   const [invoiceAmount, setInvoiceAmount] = useState('');
   const [invoiceNotes, setInvoiceNotes] = useState('');
   const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const [riceStock, setRiceStock] = useState([]);
 
   useEffect(() => {
     fetchSales();
     fetchDealersAndOrders();
+    fetchRiceStock();
   }, []);
 
   useEffect(() => {
-    const qty = parseFloat(formData.quantity) || 0;
+    let qty = parseFloat(formData.quantity) || 0;
+    if (formData.bagSize && formData.quantityBags) {
+      const bags = parseInt(formData.quantityBags, 10) || 0;
+      qty = bags * (BAG_WEIGHTS[formData.bagSize] || 0);
+    }
     const rate = parseFloat(formData.rate) || 0;
     setTotalAmount(qty * rate);
-  }, [formData.quantity, formData.rate]);
+  }, [formData.quantity, formData.quantityBags, formData.bagSize, formData.rate]);
 
   const fetchSales = async () => {
     try {
@@ -60,21 +72,140 @@ const RiceSales = () => {
     }
   };
 
+  const fetchRiceStock = async () => {
+    try {
+      const response = await axios.get('http://localhost:5000/api/rice');
+      // Filter only rice items with stock > 0
+      const availableRice = (response.data || []).filter(
+        (rice) => rice.quantity > 0 && rice.status !== 'sold'
+      );
+      setRiceStock(availableRice);
+    } catch (error) {
+      console.error('Failed to load rice stock:', error);
+    }
+  };
+
+  const validateContact = (contact) => {
+    // Remove any non-digit characters
+    const digitsOnly = contact.replace(/\D/g, '');
+    
+    if (digitsOnly.length === 0) {
+      return { valid: false, message: '' };
+    }
+    
+    if (digitsOnly.length !== 10) {
+      return { valid: false, message: 'Please enter a valid 10-digit mobile number.' };
+    }
+    
+    return { valid: true, message: '' };
+  };
+
+  const validateForm = () => {
+    const errors = {};
+    let isValid = true;
+
+    // Validate Customer Name
+    if (!formData.customerName || formData.customerName.trim().length === 0) {
+      errors.customerName = 'Customer name is required';
+      isValid = false;
+    } else if (formData.customerName.trim().length < 2) {
+      errors.customerName = 'Customer name must be at least 2 characters';
+      isValid = false;
+    }
+
+    // Validate Contact Number
+    const contactValidation = validateContact(formData.customerContact);
+    if (!contactValidation.valid) {
+      errors.customerContact = contactValidation.message || 'Please enter a valid 10-digit mobile number.';
+      isValid = false;
+    }
+
+    // Validate Rice Type
+    if (!formData.riceType || formData.riceType.trim().length === 0) {
+      errors.riceType = 'Rice type is required';
+      isValid = false;
+    }
+
+    // Validate Quantity (from bags or direct)
+    let quantity = 0;
+    if (formData.bagSize && formData.quantityBags) {
+      const bags = parseInt(formData.quantityBags, 10);
+      if (isNaN(bags) || bags <= 0) {
+        errors.quantityBags = 'Enter valid number of bags';
+        isValid = false;
+      } else {
+        quantity = bags * (BAG_WEIGHTS[formData.bagSize] || 0);
+      }
+    } else {
+      quantity = parseFloat(formData.quantity);
+    }
+    if (quantity <= 0) {
+      errors.quantity = 'Enter quantity (bags or kg)';
+      isValid = false;
+    }
+
+    // Validate Rate
+    const rate = parseFloat(formData.rate);
+    if (!formData.rate || isNaN(rate) || rate <= 0) {
+      errors.rate = 'Please enter a valid rate greater than 0';
+      isValid = false;
+    }
+
+    setFormErrors(errors);
+    return isValid;
+  };
+
   const handleChange = (e) => {
+    const { name, value } = e.target;
+    
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value,
+      [name]: value,
     });
+
+    // Clear error for this field when user starts typing
+    if (formErrors[name]) {
+      setFormErrors({
+        ...formErrors,
+        [name]: '',
+      });
+    }
+
+    // Validate contact number
+    if (name === 'customerContact') {
+      const validation = validateContact(value);
+      setContactError(validation.message);
+      if (validation.message) {
+        setFormErrors({
+          ...formErrors,
+          customerContact: validation.message,
+        });
+      }
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validate entire form before submission
+    if (!validateForm()) {
+      toast.error('Please fix the errors in the form');
+      return;
+    }
+
     setLoading(true);
+
+    let quantity = parseFloat(formData.quantity) || 0;
+    if (formData.bagSize && formData.quantityBags) {
+      const bags = parseInt(formData.quantityBags, 10) || 0;
+      quantity = bags * (BAG_WEIGHTS[formData.bagSize] || 0);
+    }
 
     try {
       await axios.post('http://localhost:5000/api/sales', {
         ...formData,
-        quantity: parseFloat(formData.quantity),
+        customerContact: formData.customerContact.replace(/\D/g, ''), // Store only digits
+        quantity,
         rate: parseFloat(formData.rate),
       });
       toast.success('Sale recorded successfully!');
@@ -83,14 +214,19 @@ const RiceSales = () => {
         customerContact: '',
         customerAddress: '',
         riceType: '',
+        bagSize: '',
+        quantityBags: '',
         quantity: '',
         rate: '',
         vehicleNumber: '',
         driverName: '',
         destination: '',
       });
+      setContactError('');
+      setFormErrors({});
       setTotalAmount(0);
       fetchSales();
+      fetchRiceStock(); // Refresh rice stock after sale
     } catch (error) {
       const message = error.response?.data?.message || 'Failed to record sale';
       toast.error(message);
@@ -162,9 +298,13 @@ const RiceSales = () => {
                         name="customerName"
                         value={formData.customerName}
                         onChange={handleChange}
-                        className="input-field"
+                        className={`input-field ${formErrors.customerName ? 'border-red-500' : ''}`}
+                        placeholder="Enter customer name"
                         required
                       />
+                      {formErrors.customerName && (
+                        <p className="mt-1 text-sm text-red-600">{formErrors.customerName}</p>
+                      )}
                     </div>
                     <div>
                       <label className="label">Contact Number *</label>
@@ -173,9 +313,14 @@ const RiceSales = () => {
                         name="customerContact"
                         value={formData.customerContact}
                         onChange={handleChange}
-                        className="input-field"
+                        className={`input-field ${contactError || formErrors.customerContact ? 'border-red-500' : ''}`}
+                        placeholder="10-digit mobile number"
+                        maxLength="10"
                         required
                       />
+                      {(contactError || formErrors.customerContact) && (
+                        <p className="mt-1 text-sm text-red-600">{contactError || formErrors.customerContact}</p>
+                      )}
                     </div>
                     <div>
                       <label className="label">Address</label>
@@ -200,29 +345,77 @@ const RiceSales = () => {
                         name="riceType"
                         value={formData.riceType}
                         onChange={handleChange}
-                        className="input-field"
+                        className={`input-field ${formErrors.riceType ? 'border-red-500' : ''}`}
                         required
                       >
                         <option value="">Select Rice Type</option>
-                        <option value="Basmati">Basmati</option>
-                        <option value="Sona Masoori">Sona Masoori</option>
-                        <option value="Jasmine">Jasmine</option>
-                        <option value="Brown Rice">Brown Rice</option>
-                        <option value="Parboiled">Parboiled</option>
-                        <option value="Other">Other</option>
+                        {riceStock.length > 0 ? (
+                          riceStock.map((rice) => (
+                            <option key={rice._id} value={rice.riceType}>
+                              {rice.riceType} - {rice.riceName} ({rice.quantity} kg available)
+                            </option>
+                          ))
+                        ) : (
+                          <option value="" disabled>No rice available in stock</option>
+                        )}
                       </select>
+                      {formErrors.riceType && (
+                        <p className="mt-1 text-sm text-red-600">{formErrors.riceType}</p>
+                      )}
+                      {riceStock.length === 0 && !formErrors.riceType && (
+                        <p className="mt-1 text-sm text-amber-600">No rice items with available stock</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="label">Bag Size</label>
+                      <select
+                        name="bagSize"
+                        value={formData.bagSize}
+                        onChange={handleChange}
+                        className="input-field"
+                      >
+                        <option value="">Select bag size (optional)</option>
+                        {BAG_SIZES.map((size) => (
+                          <option key={size} value={size}>{size}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="label">No. of Bags</label>
+                      <input
+                        type="number"
+                        name="quantityBags"
+                        value={formData.quantityBags}
+                        onChange={handleChange}
+                        className={`input-field ${formErrors.quantityBags ? 'border-red-500' : ''}`}
+                        placeholder="If using bag size"
+                        min="1"
+                      />
+                      {formErrors.quantityBags && (
+                        <p className="mt-1 text-sm text-red-600">{formErrors.quantityBags}</p>
+                      )}
                     </div>
                     <div>
                       <label className="label">Quantity (kg) *</label>
                       <input
                         type="number"
                         name="quantity"
-                        value={formData.quantity}
+                        value={
+                          formData.bagSize && formData.quantityBags
+                            ? (parseInt(formData.quantityBags, 10) || 0) * (BAG_WEIGHTS[formData.bagSize] || 0)
+                            : formData.quantity
+                        }
                         onChange={handleChange}
-                        className="input-field"
+                        className={`input-field ${formErrors.quantity ? 'border-red-500' : ''}`}
                         step="0.01"
+                        min="0.01"
+                        placeholder={formData.bagSize ? 'Auto from bags' : 'Enter quantity'}
+                        readOnly={!!(formData.bagSize && formData.quantityBags)}
                         required
                       />
+                      {formErrors.quantity && (
+                        <p className="mt-1 text-sm text-red-600">{formErrors.quantity}</p>
+                      )}
                     </div>
                     <div>
                       <label className="label">Rate (₹/kg) *</label>
@@ -231,10 +424,15 @@ const RiceSales = () => {
                         name="rate"
                         value={formData.rate}
                         onChange={handleChange}
-                        className="input-field"
+                        className={`input-field ${formErrors.rate ? 'border-red-500' : ''}`}
                         step="0.01"
+                        min="0.01"
+                        placeholder="Enter rate per kg"
                         required
                       />
+                      {formErrors.rate && (
+                        <p className="mt-1 text-sm text-red-600">{formErrors.rate}</p>
+                      )}
                     </div>
                     <div>
                       <label className="label">Total Amount</label>

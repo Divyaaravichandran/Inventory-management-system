@@ -34,13 +34,31 @@ const Payments = () => {
     notes: '',
   });
   const [dealerPaymentLoading, setDealerPaymentLoading] = useState(false);
+  const [recentPayments, setRecentPayments] = useState([]);
+  const [activeTab, setActiveTab] = useState('ledger'); // 'ledger', 'recent', or 'invoices'
 
   useEffect(() => {
     fetchSummary();
     fetchLedger();
     fetchSales();
     fetchInvoices();
+    fetchRecentPayments();
   }, []);
+
+  const fetchRecentPayments = async () => {
+    try {
+      const response = await axios.get('http://localhost:5000/api/payments');
+      // Sort by paymentDate descending (most recent first)
+      const sorted = (response.data || []).sort((a, b) => {
+        const dateA = new Date(a.paymentDate || a.createdAt);
+        const dateB = new Date(b.paymentDate || b.createdAt);
+        return dateB - dateA;
+      });
+      setRecentPayments(sorted);
+    } catch (error) {
+      console.error('Failed to load recent payments:', error);
+    }
+  };
 
   const fetchSummary = async () => {
     try {
@@ -93,6 +111,7 @@ const Payments = () => {
         notes: '',
       });
       fetchInvoices();
+      fetchRecentPayments();
     } catch (error) {
       const message =
         error.response?.data?.message || 'Failed to record dealer payment';
@@ -150,6 +169,7 @@ const Payments = () => {
       fetchLedger();
       fetchSales();
       fetchInvoices();
+      fetchRecentPayments();
     } catch (error) {
       const message = error.response?.data?.message || 'Failed to record payment';
       toast.error(message);
@@ -296,22 +316,58 @@ const Payments = () => {
           </div>
         </div>
 
-        {/* Ledger Table */}
+        {/* Tabs for Ledger and Recent Payments */}
         <div className="card">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-xl font-bold text-gray-800">Customer Ledger</h3>
-            <button
-              onClick={() => {
-                setShowPaymentForm(true);
-                setSelectedSaleId(sales[0]?._id || '');
-              }}
-              className="btn-primary flex items-center space-x-2"
-              disabled={sales.length === 0}
-            >
-              <FiPlus />
-              <span>Record Payment</span>
-            </button>
+            <div className="flex space-x-4 border-b border-gray-200">
+              <button
+                onClick={() => setActiveTab('ledger')}
+                className={`px-4 py-2 font-semibold transition-colors ${
+                  activeTab === 'ledger'
+                    ? 'text-primary-600 border-b-2 border-primary-600'
+                    : 'text-gray-600 hover:text-gray-800'
+                }`}
+              >
+                Customer Ledger
+              </button>
+              <button
+                onClick={() => setActiveTab('recent')}
+                className={`px-4 py-2 font-semibold transition-colors ${
+                  activeTab === 'recent'
+                    ? 'text-primary-600 border-b-2 border-primary-600'
+                    : 'text-gray-600 hover:text-gray-800'
+                }`}
+              >
+                Recent Payments
+              </button>
+              <button
+                onClick={() => setActiveTab('invoices')}
+                className={`px-4 py-2 font-semibold transition-colors ${
+                  activeTab === 'invoices'
+                    ? 'text-primary-600 border-b-2 border-primary-600'
+                    : 'text-gray-600 hover:text-gray-800'
+                }`}
+              >
+                Recent Invoices
+              </button>
+            </div>
+            {activeTab === 'ledger' && (
+              <button
+                onClick={() => {
+                  setShowPaymentForm(true);
+                  setSelectedSaleId(sales[0]?._id || '');
+                }}
+                className="btn-primary flex items-center space-x-2"
+                disabled={sales.length === 0}
+              >
+                <FiPlus />
+                <span>Record Payment</span>
+              </button>
+            )}
           </div>
+
+          {activeTab === 'ledger' && (
+            <>
 
           {showPaymentForm && (
             <div className="mb-6 p-6 bg-gray-50 rounded-lg border-2 border-primary-200">
@@ -469,10 +525,10 @@ const Payments = () => {
                           {getStatusIcon(entry.status)}
                           <span
                             className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(
-                              entry.status
+                              entry.status || 'pending'
                             )}`}
                           >
-                            {entry.status.charAt(0).toUpperCase() + entry.status.slice(1)}
+                            {(entry.status || 'pending').charAt(0).toUpperCase() + (entry.status || 'pending').slice(1)}
                           </span>
                         </div>
                       </td>
@@ -480,10 +536,16 @@ const Payments = () => {
                         {entry.balance > 0 && (
                           <button
                             onClick={() => {
-                              const sale = sales.find((s) => s.customerName === entry.customer);
-                              if (sale) {
-                                setSelectedSaleId(sale._id);
-                                setShowPaymentForm(true);
+                              if (entry.sourceType === 'invoice' && entry.invoiceId) {
+                                setSelectedInvoiceId(entry.invoiceId);
+                                setActiveTab('ledger');
+                                document.getElementById('dealer-invoice-payments')?.scrollIntoView({ behavior: 'smooth' });
+                              } else {
+                                const sale = sales.find((s) => s.customerName === entry.customer);
+                                if (sale) {
+                                  setSelectedSaleId(sale._id);
+                                  setShowPaymentForm(true);
+                                }
                               }
                             }}
                             className="px-3 py-1 bg-primary-500 text-white rounded-lg text-xs font-semibold hover:bg-primary-600"
@@ -504,10 +566,118 @@ const Payments = () => {
               </tbody>
             </table>
           </div>
+            </>
+          )}
+
+          {activeTab === 'recent' && (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-2 text-sm font-semibold text-gray-700">Payment ID</th>
+                    <th className="text-left py-2 text-sm font-semibold text-gray-700">Customer Name</th>
+                    <th className="text-right py-2 text-sm font-semibold text-gray-700">Amount</th>
+                    <th className="text-left py-2 text-sm font-semibold text-gray-700">Date & Time</th>
+                    <th className="text-left py-2 text-sm font-semibold text-gray-700">Mode of Payment</th>
+                    <th className="text-left py-2 text-sm font-semibold text-gray-700">Type</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentPayments.length > 0 ? (
+                    recentPayments.map((payment) => (
+                      <tr key={payment._id} className="border-b hover:bg-gray-50">
+                        <td className="py-2 text-sm text-gray-800 font-medium">
+                          #{payment._id.slice(-8).toUpperCase()}
+                        </td>
+                        <td className="py-2 text-sm text-gray-800">{payment.customerName}</td>
+                        <td className="py-2 text-sm text-gray-800 text-right font-semibold">
+                          ₹{payment.amount?.toLocaleString()}
+                        </td>
+                        <td className="py-2 text-sm text-gray-800">
+                          {new Date(payment.paymentDate || payment.createdAt).toLocaleString('en-IN', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </td>
+                        <td className="py-2 text-sm text-gray-800 capitalize">
+                          {payment.paymentMethod?.replace('_', ' ') || 'Cash'}
+                        </td>
+                        <td className="py-2 text-sm text-gray-800">
+                          {payment.saleId ? 'Sale' : payment.invoiceId ? 'Invoice' : payment.userOrderId ? 'User Order' : '—'}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="6" className="py-8 text-center text-gray-500">
+                        No recent payments found
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {activeTab === 'invoices' && (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-2 text-sm font-semibold text-gray-700">Invoice No</th>
+                    <th className="text-left py-2 text-sm font-semibold text-gray-700">Dealer</th>
+                    <th className="text-right py-2 text-sm font-semibold text-gray-700">Amount</th>
+                    <th className="text-right py-2 text-sm font-semibold text-gray-700">Paid</th>
+                    <th className="text-right py-2 text-sm font-semibold text-gray-700">Balance</th>
+                    <th className="text-left py-2 text-sm font-semibold text-gray-700">Status</th>
+                    <th className="text-left py-2 text-sm font-semibold text-gray-700">Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoices.length > 0 ? (
+                    invoices.slice(0, 15).map((inv) => {
+                      const paid = inv.paidAmount || 0;
+                      const amount = inv.amount || 0;
+                      const balance = amount - paid;
+                      const status = inv.paymentStatus || (balance <= 0 ? 'paid' : paid > 0 ? 'partial' : 'pending');
+                      return (
+                        <tr key={inv._id} className="border-b hover:bg-gray-50">
+                          <td className="py-2 text-sm text-gray-800 font-medium">{inv.invoiceNumber}</td>
+                          <td className="py-2 text-sm text-gray-800">
+                            {inv.dealer?.dealerName || inv.dealerId || '—'}
+                          </td>
+                          <td className="py-2 text-sm text-gray-800 text-right">₹{amount?.toLocaleString()}</td>
+                          <td className="py-2 text-sm text-green-600 text-right font-semibold">₹{paid?.toLocaleString()}</td>
+                          <td className="py-2 text-sm text-red-600 text-right font-semibold">₹{balance?.toLocaleString()}</td>
+                          <td className="py-2 text-sm text-gray-800">
+                            <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getStatusColor(status)}`}>
+                              {status.charAt(0).toUpperCase() + status.slice(1)}
+                            </span>
+                          </td>
+                          <td className="py-2 text-sm text-gray-800">
+                            {new Date(inv.createdAt).toLocaleDateString('en-IN')}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan="7" className="py-8 text-center text-gray-500">
+                        No invoices found
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* Dealer Invoice Payments */}
-        <div className="mt-8 card">
+        <div id="dealer-invoice-payments" className="mt-8 card">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-xl font-bold text-gray-800">Dealer Invoice Payments</h3>
           </div>

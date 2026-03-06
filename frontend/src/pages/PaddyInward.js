@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { FiPlus, FiCheck } from 'react-icons/fi';
 
 const PaddyInward = () => {
+  const [formErrors, setFormErrors] = useState({});
   const [formData, setFormData] = useState({
     paddyType: '',
     quantity: '',
@@ -35,15 +36,48 @@ const PaddyInward = () => {
     }
   };
 
+  const validateContact = (contact) => {
+    const digitsOnly = (contact || '').replace(/\D/g, '');
+    if (digitsOnly.length === 0) return { valid: false, message: 'Seller contact is required' };
+    if (digitsOnly.length !== 10) return { valid: false, message: 'Enter a valid 10-digit mobile number' };
+    return { valid: true, message: '' };
+  };
+
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+    const { name, value } = e.target;
+    setFormData({ ...formData, [name]: value });
+    if (formErrors[name]) setFormErrors({ ...formErrors, [name]: '' });
+  };
+
+  const validateForm = () => {
+    const errors = {};
+    if (!formData.paddyType) errors.paddyType = 'Paddy type is required';
+    const qty = parseFloat(formData.quantity);
+    if (!formData.quantity || isNaN(qty) || qty <= 0) errors.quantity = 'Enter a valid quantity greater than 0';
+    const weight = parseFloat(formData.weight);
+    if (!formData.weight || isNaN(weight) || weight <= 0) errors.weight = 'Enter a valid weight greater than 0';
+    if (!formData.qualityGrade) errors.qualityGrade = 'Quality grade is required';
+    const moist = parseFloat(formData.moisturePercent);
+    if (formData.moisturePercent === '' || isNaN(moist) || moist < 0 || moist > 100) {
+      errors.moisturePercent = 'Enter moisture % between 0 and 100';
+    }
+    if (!formData.sellerName?.trim()) errors.sellerName = 'Seller name is required';
+    const contactVal = validateContact(formData.sellerContact);
+    if (!contactVal.valid) errors.sellerContact = contactVal.message;
+    if (!formData.vehicleNumber?.trim()) errors.vehicleNumber = 'Vehicle number is required';
+    if (!formData.location?.trim()) errors.location = 'Location is required';
+    if (!formData.godownId) errors.godownId = 'Godown is required';
+    if (!formData.date) errors.date = 'Date is required';
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!validateForm()) {
+      toast.error('Please fix the errors in the form');
+      return;
+    }
     setLoading(true);
 
     try {
@@ -104,7 +138,7 @@ const PaddyInward = () => {
                     name="paddyType"
                     value={formData.paddyType}
                     onChange={handleChange}
-                    className="input-field"
+                    className={`input-field ${formErrors.paddyType ? 'border-red-500' : ''}`}
                     required
                   >
                     <option value="">Select Paddy Type</option>
@@ -115,6 +149,7 @@ const PaddyInward = () => {
                     <option value="Parboiled">Parboiled</option>
                     <option value="Other">Other</option>
                   </select>
+                  {formErrors.paddyType && <p className="mt-1 text-sm text-red-600">{formErrors.paddyType}</p>}
                 </div>
 
                 <div>
@@ -124,11 +159,12 @@ const PaddyInward = () => {
                     name="quantity"
                     value={formData.quantity}
                     onChange={handleChange}
-                    className="input-field"
+                    className={`input-field ${formErrors.quantity ? 'border-red-500' : ''}`}
                     placeholder="Enter quantity"
                     step="0.01"
                     required
                   />
+                  {formErrors.quantity && <p className="mt-1 text-sm text-red-600">{formErrors.quantity}</p>}
                 </div>
 
                 <div>
@@ -138,11 +174,12 @@ const PaddyInward = () => {
                     name="weight"
                     value={formData.weight}
                     onChange={handleChange}
-                    className="input-field"
+                    className={`input-field ${formErrors.weight ? 'border-red-500' : ''}`}
                     placeholder="Enter weight in tons"
                     step="0.01"
                     required
                   />
+                  {formErrors.weight && <p className="mt-1 text-sm text-red-600">{formErrors.weight}</p>}
                 </div>
 
                 <div>
@@ -151,7 +188,7 @@ const PaddyInward = () => {
                     name="qualityGrade"
                     value={formData.qualityGrade}
                     onChange={handleChange}
-                    className="input-field"
+                    className={`input-field ${formErrors.qualityGrade ? 'border-red-500' : ''}`}
                     required
                   >
                     <option value="">Select Grade</option>
@@ -160,6 +197,7 @@ const PaddyInward = () => {
                     <option value="B">B</option>
                     <option value="C">C</option>
                   </select>
+                  {formErrors.qualityGrade && <p className="mt-1 text-sm text-red-600">{formErrors.qualityGrade}</p>}
                 </div>
 
                 <div>
@@ -169,13 +207,14 @@ const PaddyInward = () => {
                     name="moisturePercent"
                     value={formData.moisturePercent}
                     onChange={handleChange}
-                    className="input-field"
-                    placeholder="Enter moisture percentage"
+                    className={`input-field ${formErrors.moisturePercent ? 'border-red-500' : ''}`}
+                    placeholder="Enter moisture percentage (0-100)"
                     min="0"
                     max="100"
                     step="0.1"
                     required
                   />
+                  {formErrors.moisturePercent && <p className="mt-1 text-sm text-red-600">{formErrors.moisturePercent}</p>}
                 </div>
               </div>
 
@@ -190,10 +229,11 @@ const PaddyInward = () => {
                     name="sellerName"
                     value={formData.sellerName}
                     onChange={handleChange}
-                    className="input-field"
+                    className={`input-field ${formErrors.sellerName ? 'border-red-500' : ''}`}
                     placeholder="Enter seller name"
                     required
                   />
+                  {formErrors.sellerName && <p className="mt-1 text-sm text-red-600">{formErrors.sellerName}</p>}
                 </div>
 
                 <div>
@@ -203,10 +243,12 @@ const PaddyInward = () => {
                     name="sellerContact"
                     value={formData.sellerContact}
                     onChange={handleChange}
-                    className="input-field"
-                    placeholder="Enter contact number"
+                    className={`input-field ${formErrors.sellerContact ? 'border-red-500' : ''}`}
+                    placeholder="10-digit mobile number"
+                    maxLength="10"
                     required
                   />
+                  {formErrors.sellerContact && <p className="mt-1 text-sm text-red-600">{formErrors.sellerContact}</p>}
                 </div>
 
                 <div>
@@ -216,10 +258,11 @@ const PaddyInward = () => {
                     name="vehicleNumber"
                     value={formData.vehicleNumber}
                     onChange={handleChange}
-                    className="input-field"
+                    className={`input-field ${formErrors.vehicleNumber ? 'border-red-500' : ''}`}
                     placeholder="Enter vehicle number"
                     required
                   />
+                  {formErrors.vehicleNumber && <p className="mt-1 text-sm text-red-600">{formErrors.vehicleNumber}</p>}
                 </div>
 
                 <div>
@@ -229,10 +272,11 @@ const PaddyInward = () => {
                     name="location"
                     value={formData.location}
                     onChange={handleChange}
-                    className="input-field"
+                    className={`input-field ${formErrors.location ? 'border-red-500' : ''}`}
                     placeholder="Enter location"
                     required
                   />
+                  {formErrors.location && <p className="mt-1 text-sm text-red-600">{formErrors.location}</p>}
                 </div>
 
                 <div>
@@ -241,7 +285,7 @@ const PaddyInward = () => {
                     name="godownId"
                     value={formData.godownId}
                     onChange={handleChange}
-                    className="input-field"
+                    className={`input-field ${formErrors.godownId ? 'border-red-500' : ''}`}
                     required
                   >
                     <option value="">Select Godown</option>
@@ -251,6 +295,7 @@ const PaddyInward = () => {
                       </option>
                     ))}
                   </select>
+                  {formErrors.godownId && <p className="mt-1 text-sm text-red-600">{formErrors.godownId}</p>}
                 </div>
 
                 <div>
@@ -260,9 +305,10 @@ const PaddyInward = () => {
                     name="date"
                     value={formData.date}
                     onChange={handleChange}
-                    className="input-field"
+                    className={`input-field ${formErrors.date ? 'border-red-500' : ''}`}
                     required
                   />
+                  {formErrors.date && <p className="mt-1 text-sm text-red-600">{formErrors.date}</p>}
                 </div>
               </div>
             </div>

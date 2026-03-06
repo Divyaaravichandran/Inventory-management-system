@@ -3,15 +3,18 @@ const { body, validationResult } = require('express-validator');
 const Payment = require('../models/Payment');
 const Sales = require('../models/Sales');
 const Invoice = require('../models/Invoice');
+const UserOrder = require('../models/UserOrder');
 const { auth, adminOnly } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Get all payments
+// Get all payments (including user order payments)
 router.get('/', auth, adminOnly, async (req, res) => {
   try {
     const payments = await Payment.find()
       .populate('saleId')
+      .populate('invoiceId')
+      .populate('userOrderId')
       .populate('receivedBy', 'name email')
       .sort({ paymentDate: -1 });
     res.json(payments);
@@ -21,7 +24,7 @@ router.get('/', auth, adminOnly, async (req, res) => {
   }
 });
 
-// Record payment (for either a sale or a dealer invoice)
+// Record payment (for sale, dealer invoice, or user order)
 router.post('/', [
   auth,
   adminOnly,
@@ -34,14 +37,15 @@ router.post('/', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { saleId, invoiceId, amount } = req.body;
+    const { saleId, invoiceId, userOrderId, amount } = req.body;
 
-    if (!saleId && !invoiceId) {
-      return res.status(400).json({ message: 'Either saleId or invoiceId is required' });
+    if (!saleId && !invoiceId && !userOrderId) {
+      return res.status(400).json({ message: 'Either saleId, invoiceId, or userOrderId is required' });
     }
 
     let sale = null;
     let invoice = null;
+    let userOrder = null;
 
     if (saleId) {
       sale = await Sales.findById(saleId);
@@ -54,6 +58,13 @@ router.post('/', [
       invoice = await Invoice.findById(invoiceId);
       if (!invoice) {
         return res.status(404).json({ message: 'Invoice not found' });
+      }
+    }
+
+    if (userOrderId) {
+      userOrder = await UserOrder.findById(userOrderId);
+      if (!userOrder) {
+        return res.status(404).json({ message: 'User order not found' });
       }
     }
 
@@ -73,6 +84,11 @@ router.post('/', [
     if (invoice) {
       paymentPayload.invoiceId = invoice._id;
       paymentPayload.dealerId = invoice.dealerId;
+    }
+
+    if (userOrder) {
+      paymentPayload.userOrderId = userOrder._id;
+      paymentPayload.orderType = 'user_order';
     }
 
     const payment = new Payment(paymentPayload);
@@ -95,8 +111,16 @@ router.post('/', [
       await invoice.save();
     }
 
+    // Update user order payment status
+    if (userOrder) {
+      userOrder.paymentStatus = 'paid';
+      await userOrder.save();
+    }
+
     const populatedPayment = await Payment.findById(payment._id)
       .populate('saleId')
+      .populate('invoiceId')
+      .populate('userOrderId')
       .populate('receivedBy', 'name email');
 
     res.status(201).json(populatedPayment);
@@ -106,26 +130,90 @@ router.post('/', [
   }
 });
 
-// Get payment summary
+// Get payment summary (including user orders)
 router.get('/summary', auth, adminOnly, async (req, res) => {
   try {
-    const sales = await Sales.find();
-    
-    const totalReceivable = sales.reduce((sum, sale) => sum + sale.totalAmount, 0);
-    const totalReceived = sales.reduce((sum, sale) => sum + sale.paidAmount, 0);
-    const totalPending = sales.reduce((sum, sale) => sum + sale.balanceAmount, 0);
+    // Sales payments
+    const salesPayments = await Payment.find({ saleId: { $exists: true } });
+    const salesTotal = salesPayments.reduce((sum, p) => sum + p.amount, 0);
 
-    const paidCount = sales.filter(s => s.paymentStatus === 'paid').length;
-    const partialCount = sales.filter(s => s.paymentStatus === 'partial').length;
-    const pendingCount = sales.filter(s => s.paymentStatus === 'pending').length;
+    // Dealer invoice payments
+    const invoicePayments = await Payment.find({ invoiceId: { $exists: true } });
+    const invoiceTotal = invoicePayments.reduce((sum, p) => sum + p.amount, 0);
+
+    // User order payments
+    const userOrderPayments = await Payment.find({ userOrderId: { $exists: true } });
+    const userOrderTotal = userOrderPayments.reduce((sum, p) => sum + p.amount, 0);
+
+    const totalReceived = salesTotal + invoiceTotal + userOrderTotal;
+
+    // Compute totalReceivable and totalPending from Sales, Invoices, UserOrders
+    const [salesDocs, invoicesDocs, userOrdersDocs] = await Promise.all([
+      Sales.find(),
+      Invoice.find().populate('dealer', 'dealerName'),
+      UserOrder.find().populate('user', 'name'),
+    ]);
+
+    let totalReceivable = 0;
+    let paidCount = 0;
+    let partialCount = 0;
+    let pendingCount = 0;
+
+    salesDocs.forEach((s) => {
+      totalReceivable += s.totalAmount || 0;
+      if (s.paymentStatus === 'paid') paidCount++;
+      else if (s.paymentStatus === 'partial') partialCount++;
+      else pendingCount++;
+    });
+
+    invoicesDocs.forEach((inv) => {
+      totalReceivable += inv.amount || 0;
+      if (inv.paymentStatus === 'paid') paidCount++;
+      else if (inv.paymentStatus === 'partial') partialCount++;
+      else pendingCount++;
+    });
+
+    userOrdersDocs.forEach((ord) => {
+      totalReceivable += ord.totalAmount || 0;
+      if (ord.paymentStatus === 'paid') paidCount++;
+      else if (ord.paymentStatus === 'partial') partialCount++;
+      else pendingCount++;
+    });
+
+    const totalPending = totalReceivable - totalReceived;
+
+    // Total payments by method
+    const paymentsByMethod = await Payment.aggregate([
+      {
+        $group: {
+          _id: '$paymentMethod',
+          total: { $sum: '$amount' },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Recent payments
+    const recentPayments = await Payment.find()
+      .populate('saleId')
+      .populate('invoiceId')
+      .populate('userOrderId')
+      .populate('receivedBy', 'name')
+      .sort({ paymentDate: -1 })
+      .limit(10);
 
     res.json({
-      totalReceivable,
       totalReceived,
+      totalReceivable,
       totalPending,
       paidCount,
       partialCount,
-      pendingCount
+      pendingCount,
+      salesPayments: salesTotal,
+      invoicePayments: invoiceTotal,
+      userOrderPayments: userOrderTotal,
+      paymentsByMethod,
+      recentPayments
     });
   } catch (error) {
     console.error(error);
@@ -133,23 +221,120 @@ router.get('/summary', auth, adminOnly, async (req, res) => {
   }
 });
 
-// Get customer ledger
+// Get customer ledger (including user orders)
+// Returns { customer, amount, paid, balance, status, date } per entry
 router.get('/ledger', auth, adminOnly, async (req, res) => {
   try {
-    const sales = await Sales.find()
-      .select('customerName totalAmount paidAmount balanceAmount paymentStatus createdAt')
-      .sort({ customerName: 1, createdAt: -1 });
+    const ledgerMap = new Map(); // key: customer (+ source prefix for uniqueness), value: { customer, amount, paid, balance, status, date, saleId?, invoiceId?, sourceType }
 
-    const ledger = sales.map(sale => ({
-      customer: sale.customerName,
-      amount: sale.totalAmount,
-      paid: sale.paidAmount,
-      balance: sale.balanceAmount,
-      status: sale.paymentStatus,
-      date: sale.createdAt
-    }));
+    // Sales - group by customerName
+    const sales = await Sales.find().sort({ updatedAt: -1 });
+    sales.forEach((s) => {
+      const customer = s.customerName;
+      const amount = s.totalAmount || 0;
+      const paid = s.paidAmount || 0;
+      const balance = amount - paid;
+      const status = s.paymentStatus || (balance <= 0 ? 'paid' : paid > 0 ? 'partial' : 'pending');
+      const date = s.updatedAt || s.createdAt;
+      const key = `sale:${customer}`;
+      if (!ledgerMap.has(key)) {
+        ledgerMap.set(key, {
+          customer,
+          amount: 0,
+          paid: 0,
+          balance: 0,
+          status: 'pending',
+          date,
+          saleId: s._id,
+          sourceType: 'sale',
+        });
+      }
+      const entry = ledgerMap.get(key);
+      entry.amount += amount;
+      entry.paid += paid;
+      entry.balance += balance;
+      entry.status = balance <= 0 ? 'paid' : entry.paid > 0 ? 'partial' : 'pending';
+      if (new Date(date) > new Date(entry.date)) entry.date = date;
+    });
 
+    // Invoices - group by dealer
+    const invoices = await Invoice.find().populate('dealer', 'dealerName dealerId').sort({ updatedAt: -1 });
+    invoices.forEach((inv) => {
+      const customer = inv.dealer?.dealerName || inv.dealerId || 'Dealer';
+      const amount = inv.amount || 0;
+      const paid = inv.paidAmount || 0;
+      const balance = amount - paid;
+      const status = inv.paymentStatus || (balance <= 0 ? 'paid' : paid > 0 ? 'partial' : 'pending');
+      const date = inv.updatedAt || inv.createdAt;
+      const key = `invoice:${customer}`;
+      if (!ledgerMap.has(key)) {
+        ledgerMap.set(key, {
+          customer,
+          amount: 0,
+          paid: 0,
+          balance: 0,
+          status: 'pending',
+          date,
+          invoiceId: balance > 0 ? inv._id : null,
+          sourceType: 'invoice',
+        });
+      }
+      const entry = ledgerMap.get(key);
+      entry.amount += amount;
+      entry.paid += paid;
+      entry.balance += balance;
+      entry.status = balance <= 0 ? 'paid' : entry.paid > 0 ? 'partial' : 'pending';
+      if (balance > 0 && !entry.invoiceId) entry.invoiceId = inv._id;
+      if (new Date(date) > new Date(entry.date)) entry.date = date;
+    });
+
+    // UserOrders - group by user
+    const userOrders = await UserOrder.find().populate('user', 'name').sort({ updatedAt: -1 });
+    userOrders.forEach((ord) => {
+      const customer = ord.user?.name || 'User';
+      const amount = ord.totalAmount || 0;
+      const paid = ord.paymentStatus === 'paid' ? amount : 0;
+      const balance = amount - paid;
+      const status = ord.paymentStatus || (balance <= 0 ? 'paid' : 'pending');
+      const date = ord.updatedAt || ord.createdAt;
+      const key = `userOrder:${ord.user?._id || customer}`;
+      if (!ledgerMap.has(key)) {
+        ledgerMap.set(key, {
+          customer,
+          amount: 0,
+          paid: 0,
+          balance: 0,
+          status: 'pending',
+          date,
+          sourceType: 'userOrder',
+        });
+      }
+      const entry = ledgerMap.get(key);
+      entry.amount += amount;
+      entry.paid += paid;
+      entry.balance += balance;
+      entry.status = balance <= 0 ? 'paid' : entry.paid > 0 ? 'partial' : 'pending';
+      if (new Date(date) > new Date(entry.date)) entry.date = date;
+    });
+
+    // Convert to array and sort by date desc (most recent first)
+    const ledger = Array.from(ledgerMap.values()).sort((a, b) => new Date(b.date) - new Date(a.date));
     res.json(ledger);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get user order specific payments
+router.get('/user-orders', auth, adminOnly, async (req, res) => {
+  try {
+    const payments = await Payment.find({ userOrderId: { $exists: true } })
+      .populate('userOrderId')
+      .populate('receivedBy', 'name email')
+      .sort({ paymentDate: -1 });
+    
+    res.json(payments);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });

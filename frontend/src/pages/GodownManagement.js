@@ -2,12 +2,15 @@ import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import axios from 'axios';
 import toast from 'react-hot-toast';
-import { FiPlus, FiMapPin, FiPackage } from 'react-icons/fi';
+import { FiPlus, FiMapPin, FiPackage, FiX } from 'react-icons/fi';
 
 const GodownManagement = () => {
   const [godowns, setGodowns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [selectedGodown, setSelectedGodown] = useState(null);
+  const [godownDetails, setGodownDetails] = useState(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     location: '',
@@ -62,6 +65,25 @@ const GodownManagement = () => {
     if (percent >= 90) return 'bg-red-500';
     if (percent >= 70) return 'bg-amber-500';
     return 'bg-green-500';
+  };
+
+  const handleGodownClick = async (godown) => {
+    setSelectedGodown(godown);
+    setDetailsLoading(true);
+    setGodownDetails(null);
+    try {
+      const res = await axios.get(`http://localhost:5000/api/godown/${godown._id}/details`);
+      setGodownDetails(res.data);
+    } catch (error) {
+      toast.error('Failed to load godown details');
+    } finally {
+      setDetailsLoading(false);
+    }
+  };
+
+  const closeGodownDetails = () => {
+    setSelectedGodown(null);
+    setGodownDetails(null);
   };
 
   if (loading) {
@@ -161,9 +183,10 @@ const GodownManagement = () => {
             return (
               <div
                 key={godown._id}
-                className={`card transform hover:scale-105 transition-all ${
+                onClick={() => handleGodownClick(godown)}
+                className={`card transform hover:scale-105 transition-all cursor-pointer ${
                   isNearFull ? 'ring-2 ring-amber-500 shadow-lg' : ''
-                }`}
+                } ${selectedGodown?._id === godown._id ? 'ring-2 ring-primary-500' : ''}`}
               >
                 <div className="flex items-start justify-between mb-4">
                   <div>
@@ -215,6 +238,66 @@ const GodownManagement = () => {
           <div className="card text-center py-12">
             <FiPackage className="mx-auto text-gray-400 mb-4" size={48} />
             <p className="text-gray-600">No godowns found. Add your first godown to get started.</p>
+          </div>
+        )}
+
+        {/* Godown Stock Modal */}
+        {selectedGodown && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={closeGodownDetails}>
+            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[85vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between p-4 border-b">
+                <h3 className="text-xl font-bold text-gray-800">
+                  {selectedGodown.name} - Stock Details
+                </h3>
+                <button onClick={closeGodownDetails} className="p-2 hover:bg-gray-100 rounded-lg">
+                  <FiX size={24} />
+                </button>
+              </div>
+              <div className="p-4 overflow-y-auto max-h-[70vh]">
+                {detailsLoading ? (
+                  <div className="flex justify-center py-12">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600" />
+                  </div>
+                ) : godownDetails ? (
+                  <div className="space-y-6">
+                    <div>
+                      <h4 className="font-semibold text-gray-800 mb-2">Paddy Stock</h4>
+                      {godownDetails.paddyStock && godownDetails.paddyStock.length > 0 ? (
+                        <div className="space-y-2">
+                          {godownDetails.paddyStock.map((p) => (
+                            <div key={p._id} className="p-3 bg-amber-50 rounded-lg flex justify-between items-center">
+                              <span className="font-medium text-gray-800">{p.paddyType}</span>
+                              <span className="text-sm text-gray-600">
+                                {p.quantity?.toLocaleString()} qty | {p.weight?.toLocaleString()} tons | {p.qualityGrade}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-gray-500 text-sm">No paddy stock</p>
+                      )}
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-800 mb-2">Rice Stock</h4>
+                      {godownDetails.riceStock && godownDetails.riceStock.length > 0 ? (
+                        <div className="space-y-2">
+                          {godownDetails.riceStock.map((r) => (
+                            <div key={r._id} className="p-3 bg-green-50 rounded-lg flex justify-between items-center">
+                              <span className="font-medium text-gray-800">{r.riceType} - {r.riceName}</span>
+                              <span className="text-sm text-gray-600">
+                                {r.quantity?.toLocaleString()} kg | 5kg:{r.bagsStock?.['5kg'] || 0} | 10kg:{r.bagsStock?.['10kg'] || 0} | 25kg:{r.bagsStock?.['25kg'] || 0} | 75kg:{r.bagsStock?.['75kg'] || 0}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-gray-500 text-sm">No rice stock</p>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
           </div>
         )}
       </div>

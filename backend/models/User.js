@@ -24,6 +24,16 @@ const userSchema = new mongoose.Schema({
     enum: ['admin', 'dealer', 'user'],
     default: 'admin'
   },
+  phone: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  address: {
+    type: String,
+    trim: true,
+    default: ''
+  },
   // Optional link to a dealer account when role === 'dealer'
   dealerId: {
     type: String,
